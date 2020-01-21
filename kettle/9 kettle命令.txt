@@ -1,0 +1,9 @@
+
+执行转换
+	pan.sh -file xxx.ktr   
+
+执行job
+	kitchen.sh -file  xxx.kjb
+
+
+不加参数都是打印使用信息

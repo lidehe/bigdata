@@ -1,0 +1,11 @@
+
+
+	kettle执行带有数据连接（hadoop、数据库、kafka等）的作业会报错：No repository provided, can't load transformation
+	因为在windows下编辑时，会把东西放在 用户/.kettle下,把这个目录拷贝到linux上用户目录下就行了
+
+	涉及文件时，尤其要注意文件格式时dos还是unix，设置错误会出现 Couldn't open file #0的错误
+
+    如果涉及到hadoop，则要
+        1、把shim相关的文件也拷贝到linux上（文件在plugins\pentaho-big-data-plugin\hadoop-configurations）
+        2、更改plugins\pentaho-big-data-plugin\plugin.properties文件，
+        	把配置项active.hadoop.configuration配置为对应shim的目录名字，如myhadoop3，注意，是目录名字哦

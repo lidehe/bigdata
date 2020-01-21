@@ -1,0 +1,74 @@
+
+更多内容请参考文章 http://www.uml.org.cn/sjjmck/201910101.asp?artid=22506
+
+1、主要使用main
+2、获取行和输出到下一个步骤，均由kettle自有方法完成
+   用户业务代码在上述两个步骤之间
+   当然，也可以自定义输出到别的数据接口
+   非常简单的一个代码案例：不做任何处理
+   public boolean processRow(StepMetaInterface smi, StepDataInterface sdi) throws KettleException {
+
+   		Object[] r = getRow();
+
+   		if (r == null) {
+      		setOutputDone();
+      		return false;
+   		}
+   		// 1、获取上个步骤输出的字段，要在上个步骤中定义，
+   		//       例如上个步骤读取person表，表中有字段user_name。其它字段也是这样获取
+   		String user_name = get(Fields.In, "user_name").getString(r);
+   		
+
+   		// 2、用户业务逻辑
+   		//      比如给名字加上前缀zz
+   		user_name+="zz";
+
+
+   		// 3、输出部分
+    	//      给输出设定好字段和值，如果有新字段要在下面设定一下哦，没有的话会自动使用原来字段
+    	get(Fields.Out, "new_user_name").setValue(r, foobar);
+
+  		// 		发送到下一个步骤，非必需，可以按需输出到别的数据接口
+  		putRow(data.outputRowMeta, r);
+   		return true;
+  }
+
+
+还支持以下操作：
+    导包，前提是要把对应的包放到lib目录下
+    定义成员变量
+
+    案例：
+    import org.apache.kafka.clients.producer.KafkaProducer;//导包，kafka-client.xxx.jar已经放到lib下了
+    import org.apache.kafka.clients.producer.ProducerRecord;
+    import java.util.Properties;
+    
+    KafkaProducer producer =null;// 定义一个成员变量，在别的方法里可以使用
+        
+    public boolean init(StepMetaInterface stepMetaInterface, StepDataInterface stepDataInterface) {
+      Properties props = new Properties();
+      props.put("bootstrap.servers", "10.204.145.155:9092,10.204.145.156:9092,10.204.145.157:9092");
+      props.put("acks", "all");
+      props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+      props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+    
+      producer = new KafkaProducer<String, String>(props);
+      return parent.initImpl(stepMetaInterface, stepDataInterface);
+    }
+    
+    public boolean processRow(StepMetaInterface smi, StepDataInterface sdi) throws KettleException {
+    
+      Object[] r = getRow();
+    
+      if (r == null) {
+        setOutputDone();
+        return false;
+      }
+    
+      String key = get(Fields.In, "keys").getString(r);
+      String val = key+"zz";
+      producer.send(new ProducerRecord<String, String>("kettle_test", key, val));
+      // producer.close();
+      return true;
+    }
+

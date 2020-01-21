@@ -1,0 +1,120 @@
+
+起点：spark-submit命令
+	spark-submit --master yarn  --class com.zxftech.rrms.Prod --deploy-mode client sb.jar
+
+spark-submit
+	-- 调用              "${SPARK_HOME}"/bin/spark-class org.apache.spark.deploy.SparkSubmit "$@"
+
+
+spark-class
+    -- 加载 spark-env.sh中的信息
+    
+	-- RUNNER            java命令
+
+	-- SPARK_JARS_DIR    ${SPARK_HOME}/jars
+                  		 或者${SPARK_HOME}/assembly/target/scala-$SPARK_SCALA_VERSION/jars
+
+    -- LAUNCH_CLASSPATH  $SPARK_JARS_DIR/*
+
+
+    -- build_command  "$RUNNER" -Xmx128m -cp "$LAUNCH_CLASSPATH" org.apache.spark.launcher.Main "$@"
+    	特别注意，其中此时的$@
+			org.apache.spark.deploy.SparkSubmit   多的org.apache.spark.deploy.SparkSubmit是spark-submit传给spark-class的
+			spark-submit      					  这个是$0,不能忽略哦
+			--master yarn  
+			--class com.zxftech.rrms.Prod 
+			--deploy-mode client 
+			sb.jar
+
+		build_command 完整编译后的结果
+ 			/usr/java/bin/java -cp /home/spark/spark/spark-2.4.4/conf/:/home/spark/spark/spark-2.4.4/jars/*:/home/spark/hadoop/hadoop-3.1.3/etc/hadoop/ -Xmx1g org.apache.spark.deploy.SparkSubmit --master yarn --deploy-mode client --class com.zxftech.rrms.Prod sb.jar
+
+			整理后
+	 		/usr/java/bin/java 
+	 		-cp /home/spark/spark/spark-2.4.4/conf/:/home/spark/spark/spark-2.4.4/jars/*:/home/spark/hadoop/hadoop-3.1.3/etc/hadoop/ 
+	 		-Xmx1g 
+	 		org.apache.spark.deploy.SparkSubmit --master yarn --deploy-mode client --class com.zxftech.rrms.Prod sb.jar
+
+    -- CMD那一段
+            先定义空的数组CMD=()，然后往里放东西 buidl_command给出来的东西，用空格切分
+          	/usr/java/bin/java
+            -cp /home/spark/spark/spark-2.4.4/conf/:/home/spark/spark/spark-2.4.4/jars/*:/home/spark/hadoop/hadoop-3.1.3/etc/hadoop/ 
+            org.apache.spark.deploy.SparkSubmit --master yarn --deploy-mode cluster --class com.zxftech.rrms.Prod sb.jar 0
+
+=================== 参数跟踪===================================
+注意$@里是没有$0的
+
+shell执行命令 spark-submit --master yarn  --class com.zxftech.rrms.Prod --deploy-mode client sb.jar
+
+spark-submit收到的参数
+			--master 
+			yarn  
+			--class 
+			com.zxftech.rrms.Prod 
+			--deploy-mode 
+			client 
+			sb.jar
+
+spark-class收到的参数
+			org.apache.spark.deploy.SparkSubmit  
+			--master 
+			yarn  
+			--class 
+			com.zxftech.rrms.Prod 
+			--deploy-mode 
+			client 
+			sb.jar
+
+launcher收到的参数
+			与spark-class收到的参数一样
+			org.apache.spark.deploy.SparkSubmit  
+			--master 
+			yarn  
+			--class 
+			com.zxftech.rrms.Prod 
+			--deploy-mode 
+			client 
+			sb.jar
+
+
+SparkSubmit收到的参数
+			--master 
+			yarn 
+			--deploy-mode 
+			client 
+			--class 
+			com.zxftech.rrms.Prod 
+			sb.jar
+
+
+
+如果是client模式，
+	那么childMainClass会使用JavaMainApplication，直接在当前节点执行用户jar的main方法
+	不管master是哪个
+	然后开始SparkContext
+
+如果是cluster模式，（主要以yarn cluster为例）
+	那么就要区别master是哪个，比如是yarn，那么childMainClass会使用org.apache.spark.deploy.yarn.YarnClusterApplication，该类会和master(这里是yarn server)通信，提交配置信息、用户jar等信息到集群，创建容器，然后会再容器里启动用户jar的main方法
+    然后就是发送到YARN集群
+    然后开始SparkContext
+
+Main class:
+	org.apache.spark.deploy.yarn.YarnClusterApplication
+
+Arguments:
+	--jar
+	file:/home/spark/sb.jar
+	--class
+	com.zxftech.rrms.Prod
+
+Spark config:
+	(spark.master,yarn)
+	(spark.app.name,com.zxftech.rrms.Prod)
+	(spark.submit.deployMode,cluster)
+	Classpath elements:
+	file:/home/spark/sb.jar
+
+
+
+
+

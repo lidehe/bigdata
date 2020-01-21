@@ -1,0 +1,166 @@
+
+At a high level, every Spark application consists of a driver program that runs the user’s main function and executes various parallel operations on a cluster. The main abstraction Spark provides is a resilient distributed dataset (RDD), which is a collection of elements partitioned across the nodes of the cluster that can be operated on in parallel. RDDs are created by starting with a file in the Hadoop file system (or any other Hadoop-supported file system), or an existing Scala collection in the driver program, and transforming it. Users may also ask Spark to persist an RDD in memory, allowing it to be reused efficiently across parallel operations. Finally, RDDs automatically recover from node failures.
+
+在更高的层次上，每个spark应用程序都由一个运行用户主方法并且在一个集群上并行执行的的驱动程序构成。spark提供的最主的概念是弹性分布式数据集，这是一个由在集群上各节点分区并且可以被并行操作的元素的集合。RDDs可以创建自一个hdfs文件，或者一个已存在于驱动程序的scala集合，并转换它。用户也会要求spark持久化的RDD到内存中，以使之可以被并行操作高效地复用。最后，RDDs可以从失效节点自动恢复。
+
+
+
+
+A second abstraction in Spark is shared variables that can be used in parallel operations. By default, when Spark runs a function in parallel as a set of tasks on different nodes, it ships a copy of each variable used in the function to each task. Sometimes, a variable needs to be shared across tasks, or between tasks and the driver program. Spark supports two types of shared variables: broadcast variables, which can be used to cache a value in memory on all nodes, and accumulators, which are variables that are only “added” to, such as counters and sums.
+
+spark的第二个概念是可用于并行操作的共享变量。当spark在不同节点上的一组task上执行方法时，默认会把方法中每一个变量拷贝到每一个task里。有时，变量需要被task共享，或者task之间，或驱动程序之间。spark支持两类共享变量：broadcast变量（可以用于把值缓存到所有节点的内存中），accumulators累加器（改类变量只能用于“加”运算）
+
+
+
+
+This guide shows each of these features in each of Spark’s supported languages. It is easiest to follow along with if you launch Spark’s interactive shell – either bin/spark-shell for the Scala shell or bin/pyspark for the Python one.
+
+本指南使用spark支持的每种语言各展示了这些特点。使用交互式shell是跟随知道的最容易的方式。
+
+
+
+ There are two ways to create RDDs: parallelizing an existing collection in your driver program, or referencing a dataset in an external storage system, such as a shared filesystem, HDFS, HBase, or any data source offering a Hadoop InputFormat.
+
+ 有两种方式创建rdds：把驱动程序中的一个存在的集合并行化；或者引用一个外部存储系统中的数据集，例如共享系统、hdfs、hbase，或者任何提供hadoop inputformat的数据源
+
+
+
+ RDDs support two types of operations: transformations, which create a new dataset from an existing one, and actions, which return a value to the driver program after running a computation on the dataset. For example, map is a transformation that passes each dataset element through a function and returns a new RDD representing the results. On the other hand, reduce is an action that aggregates all the elements of the RDD using some function and returns the final result to the driver program (although there is also a parallel reduceByKey that returns a distributed dataset).
+
+ RDDs支持两种类型的操作：转换，该操作从存在的数据集上新建数据集，在新数据集上执行运算后把值返回给驱动程序。例如，map是一个把数据集中每个元素传递给函数然后返回一个代表结果的新数据集的转换操作。相反，reduce是一个“动作”，该动作使用函数聚合RDD里的所有的元素，并且把最终结果返回给驱动程序（尽管还有返回分布式数据集的并行的reduceByKey）
+
+
+
+All transformations in Spark are lazy, in that they do not compute their results right away. Instead, they just remember the transformations applied to some base dataset (e.g. a file). The transformations are only computed when an action requires a result to be returned to the driver program. This design enables Spark to run more efficiently. For example, we can realize that a dataset created through map will be used in a reduce and return only the result of the reduce to the driver, rather than the larger mapped dataset.
+
+所有转换在spark里都是延迟操作，它们不会马上计算结果。相反，它们只是记住应用到数据集上的转换。这些转换只有在“动作”需要结果被返回给驱动程序时才会计算。这样设计允许spark更加高效。例如，。。。
+
+
+By default, each transformed RDD may be recomputed each time you run an action on it. However, you may also persist an RDD in memory using the persist (or cache) method, in which case Spark will keep the elements around on the cluster for much faster access the next time you query it. There is also support for persisting RDDs on disk, or replicated across multiple nodes.
+
+默认情况下，每个RDD会在你每次在它上面执行“动作时”被计算。但是，你或许想要使用persist(或者cache)方法把RDD持久化到内存中，这样spark会把元素保存在集群范围内，以便于下次查询时更加快速地访问。此外还支持把RDDS持久化到磁盘，或者创建副本到多个节点。
+
+
+
+
+Another common idiom is attempting to print out the elements of an RDD using rdd.foreach(println) or rdd.map(println). On a single machine, this will generate the expected output and print all the RDD’s elements. However, in cluster mode, the output to stdout being called by the executors is now writing to the executor’s stdout instead, not the one on the driver, so stdout on the driver won’t show these! To print all elements on the driver, one can use the collect() method to first bring the RDD to the driver node thus: rdd.collect().foreach(println). This can cause the driver to run out of memory, though, because collect() fetches the entire RDD to a single machine; if you only need to print a few elements of the RDD, a safer approach is to use the take(): rdd.take(100).foreach(println).
+
+另一个常用的管用操作是试图使用rdd.foreach(println) or rdd.map(println)打印RDD的元素。在单机上，这样做会得到期望的结果，打印所有的元素。但是，在集群模式下，到标准输出的内容会被到executor的标准输出，而不是驱动程序的输出，所以驱动程序的标准输出不会显示元素。为了把元素打印到驱动，你可以调用collect()方法，首先把RDD取到驱动节点上，然后打印。但这样做有个问题，如果RDD很大，就会导致驱动节点内存溢出。可以使用take(int num)来取RDD的部分数据。
+
+
+
+----------------- 关于spark 闭包 下面由闭包的介绍-----------
+核心概念 闭包
+
+The behavior of the above code is undefined, and may not work as intended. To execute jobs, Spark breaks up the processing of RDD operations into tasks, each of which is executed by an executor. Prior to execution, Spark computes the task’s closure. The closure is those variables and methods which must be visible for the executor to perform its computations on the RDD (in this case foreach()). This closure is serialized and sent to each executor.
+
+上面代码的行为不确定、能否按照设想的去执行也不好说。为执行这个任务，spark把对RDD的处理分散到task里，每个task由一个executor执行。优先执行的是spark计算闭包。所谓闭包，就是让变量和方法必须对所有执行这个RDD上的计算的executor可见。闭包是序列化后并发送到executor上的。
+
+The variables within the closure sent to each executor are now copies and thus, when counter is referenced within the foreach function, it’s no longer the counter on the driver node. There is still a counter in the memory of the driver node but this is no longer visible to the executors! The executors only see the copy from the serialized closure. Thus, the final value of counter will still be zero since all operations on counter were referencing the value within the serialized closure.
+
+闭包里的变量被发送到每个executor并且被拷贝，因此，当代码中的变量“counter”在foreach方法内部被引用，它不再是驱动程序上的那个“counter”了。但驱动程序节点上的内存里仍然会有一个“counter”，但是对于executors不再可见。executors只能见到序列化的闭包中的“counter”的拷贝。因此，counter的最终值仍然是0，因为“counter”上的所有的操作都只是操作闭包中的“counter”的备份。
+
+In local mode, in some circumstances, the foreach function will actually execute within the same JVM as the driver and will reference the same original counter, and may actually update it.
+
+本地模式下，某些情况下，foreach方法会与驱动程序在同一个JVM里执行，并且会引用最初的“counter”，甚至可能会更新它。
+
+To ensure well-defined behavior in these sorts of scenarios one should use an Accumulator. Accumulators in Spark are used specifically to provide a mechanism for safely updating a variable when execution is split up across worker nodes in a cluster. The Accumulators section of this guide discusses these in more detail.
+
+为确保在这类方案/计划里定义良好的行为，最好使用Accumulator（累加器）。spark使用Accumulator来提供一种机制以便于安全地更新变量，当执行被切分到集群中的节点上时。本知道的Accumulators部分会更加详细地讨论这些。
+
+In general, closures - constructs like loops or locally defined methods, should not be used to mutate some global state. Spark does not define or guarantee the behavior of mutations to objects referenced from outside of closures. Some code that does this may work in local mode, but that’s just by accident and such code will not behave as expected in distributed mode. Use an Accumulator instead if some global aggregation is needed.
+
+通常，闭包--类如循环、局部定义的方法，不应该被用于操作全局状态。spark不定义或者不保证操作闭包外的对象应用的行为。那些做了此类事情的代码可以在 local模式下工作，但是仅仅是随机的，此类代码在分布式模式下的行为会与期望不一致。如果需要一些全局的聚合，请使用一个Accumulators作为替代
+
+
+比较关键的是，每个task对Accumulators的更新只会执行一次，也就是说，失败重新执行的task不再能够更新Accumulators。
+
+
+Accumulators
+
+
+Broadcast Variables（广播变量）
+      只读，不可变哦，否则可能造成各个节点数据不一致，或者新增节点数据不一致
+      拷贝到节点，而不是task
+      最好用于缓存公用的且量大的数据
+
+
+
+
+
+
+
+
+================== 关于闭包的介绍 =====================================
+private Thread t1 =null;
+void CreateThread(){     
+  string x = "Hello,"; 
+
+  t1 = new System.Threading.Thread(
+           delegate(){               
+                    string y = "Closure!";               
+                    System.Console.Write(x+y);            
+                    }
+    );
+}
+
+void DoThread(){   
+      CreateThread();   
+      t1.Start();
+ }
+
+
+ 通过这个简单的例子，可以发现几个特点：
+1、变量x不是通过参数传递到匿名函数中，而是在匿名函数中直接引用，从语法上来讲好像也是合理的，因为匿名函数的作用域在创建时变量x是在其范围内的。
+2、变量x是在CreateThread中定义的，那么CreateThread执行完后，变量x应该被回收，但本例中显然不会。因为匿名函数的引用导致了变量x的生命周期延长到匿名函数执行完成。
+
+好了，现在可以来说说闭包了，关于闭包的定义基本如下：
+闭包是词法闭包（Lexical Closure）的简称，是引用了外部变量的函数。
+这个被引用的外部变量将和这个函数一同存在，即使已经离开了创造它的环境也不例外。所以，有另一种说法认为闭包是由函数和与其相关的引用环境组合而成的实体。
+
+闭包的作用简单来说就是能够方便的调用外部变量，容易和优雅的按需创建匿名方法，减少代码量和简化操作。
+应用场景适合引用环境在运行时可能发生变化时使用，若函数在定义和运行时的引用环境是相同的，则没必要使用闭包。
+
+支持闭包的语言一般具有如下特性：
+1、函数可以作为一个变量的值，也可以作为另外一个函数的返回值或参数。
+2、函数可以嵌套定义，即在一个函数内部可以定义另外一个函数。
+3、可以捕获引用环境。并把引用环境和函数代码组成一个可调用执行的实体。
+4、允许定义匿名函数。
+
+一些其他有意思的说法：
+对象是附有行为的数据，而闭包是附有数据的行为。
+如果把闭包从一个语法机制提升为一种设计概念，那么闭包是从用户角度考虑的一种设计概念，它基于对上下文的分析，把龌龊的事情、复杂的事情和外部环境交互的事情都自己做了，留给用户一个很自然的接口。
+
+
+
+
+
+
+
+
+=============================== Spark-streaming ===============================
+
+Spark Streaming provides two categories of built-in streaming sources.
+    Basic sources: Sources directly available in the StreamingContext API. Examples: file systems, and socket connections.
+    Advanced sources: Sources like Kafka, Flume, Kinesis, etc. are available through extra utility classes. These require linking against extra dependencies as discussed in the linking section.
+Spark-streaming提供两种内建的流式数据源：
+    基本数据源：直接从StreamingContext 接口获取的数据源，例如 文件系统，socket连接
+    高级数据源：像Kafka, Flume, Kinesis等数据源，可以从附属的类中获取。这些数据源需要连接一些在“连接”部分讨论过的依赖。
+
+
+
+
+使用高级数据源的注意事项
+Note that these advanced sources are not available in the Spark shell, hence applications based on these advanced sources cannot be tested in the shell. If you really want to use them in the Spark shell you will have to download the corresponding Maven artifact’s JAR along with its dependencies and add it to the classpath.
+
+需要注意的是，这个高级的数据源在Spark shell中是获取不到的，因此使用了这个高级数据源的应用程序在shell中是无法测试的。如果是在想在Spark shell中使用，就必须要下载对应的依赖jar文件并且把它添加到classpath中。
+
+
+
+There can be two kinds of data sources based on their reliability. Sources (like Kafka and Flume) allow the transferred data to be acknowledged. If the system receiving data from these reliable sources acknowledges the received data correctly, it can be ensured that no data will be lost due to any kind of failure. This leads to two kinds of receivers:
+    Reliable Receiver - A reliable receiver correctly sends acknowledgment to a reliable source when the data has been received and stored in Spark with replication.
+    Unreliable Receiver - An unreliable receiver does not send acknowledgment to a source. This can be used for sources that do not support acknowledgment, or even for reliable sources when one does not want or need to go into the complexity of acknowledgment.
+
+根据可靠性，可以把数据接收器分为两类。像（kafka和flume）允许传送被通知的，如果系统从这些可靠的数据源收到数据，可以确保数据不会丢失。
+    可靠的接收：当数据被接收并且存储（spark副本），会正确地通知数据源消息已经被收到了
+    不可靠的接收：不需要通知数据源

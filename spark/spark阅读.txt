@@ -1,0 +1,17 @@
+
+起点：spark-submit命令
+命令：spark-submit --master yarn  --class com.zxftech.rrms.Prod --deploy-mode client sb.jar
+
+获得结果：
+
+ -- 依赖jar的处理，关键点spark-class脚本中变量 LAUNCH_CLASSPATH
+		通过对spark执行driver的过程的了解，发现把相关的HBase的jar放到${SPARK_HOME}/jars里也行，就不用 --jars了，这是在安装环境层面进行解决的
+		当然了，也可以通过--jars传递，这是在执行层面进行解决的
+
+ -- 获得执行脚本编译出来的命令
+ 		可以通过设置环境变量SPARK_PRINT_LAUNCH_COMMAND来获得Spark Command，也就是执行脚本编译出来的命令，例如：
+			执行：spark-submit --master yarn  --class com.zxftech.rrms.Prod --deploy-mode client sb.jar
+			编译后命令：Spark Command: 
+				/usr/java/bin/java -cp /home/spark/spark/spark-2.4.4/conf/:/home/spark/spark/spark-2.4.4/jars/*:/home/spark/hadoop/hadoop-3.1.3/etc/hadoop/ -Xmx1g org.apache.spark.deploy.SparkSubmit --master yarn --deploy-mode client --class com.zxftech.rrms.Prod sb.jar
+
+ -- 

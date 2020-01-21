@@ -1,0 +1,23 @@
+
+算子-续
+
+二、map与mapPartitions的区别
+map: 比如一个partition中有1万条数据；那么你的function要执行和计算1万次。
+
+MapPartitions:一个task仅仅会执行一次function，function一次接收所有的partition数据。只要执行一次就可以了，性能比较高。
+
+如果在map过程中需要频繁创建额外的对象(例如将rdd中的数据通过jdbc写入数据库,map需要为每个元素创建一个链接而mapPartition为每个partition创建一个链接),则mapPartitions效率比map高的多。
+
+SparkSql或DataFrame默认会对程序进行mapPartition的优化。
+
+MapPartitions的缺点：一定是有的。
+如果是普通的map操作，一次function的执行就处理一条数据；那么如果内存不够用的情况下，比如处理了1千条数据了，那么这个时候内存不够了，那么就可以将已经处理完的1千条数据从内存里面垃圾回收掉，或者用其他方法，腾出空间来吧。
+
+所以说普通的map操作通常不会导致内存的OOM异常。
+
+但是MapPartitions操作，对于大量数据来说，比如甚至一个partition，100万数据，一次传入一个function以后，那么可能一下子内存不够，但是又没有办法去腾出内存空间来，可能就OOM，内存溢出。
+
+
+————————————————
+版权声明：本文为CSDN博主「chbxw」的原创文章，遵循 CC 4.0 BY-SA 版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/wuxintdrh/article/details/80278479

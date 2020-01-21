@@ -1,0 +1,31 @@
+
+
+
+2019年11月28日
+-- kettle连接spark
+		主要问题2个：
+			1、shims选择，例如，在7.1版本中，只要给了mysql-connector，并选择shims为chd5.1，直接就能连上了
+			     现在知道为什么了，因为plugins下的cdh5.1下的lib包里有hive1.1.0的包，这个可能是和1.2.1兼容，所以可行。
+			2、版本问题，例如，在8+版本中，给了mysql-connector,然后选择chd6.1,连接就报错了
+        
+        解决办法：
+        	尝试添加自定义的shims，在data-integration\plugins\pentaho-big-data-plugin\hadoop-configurations增加一个目录
+        	往这个目录里的lib里免拷贝兼容的jar包
+        	在打开后的界面 tool->hadoop distributions里找到，选择，然后就能连接了
+
+		kettle下载
+  	 		https://sourceforge.net/projects/pentaho/files/Data%20Integration/
+
+
+20191218
+	kettle执行带有数据连接（数据库、kafka等）的作业
+	在windows上编辑执行没问题
+	在linux下执行报错：No repository provided, can't load transformation
+	
+	因为在windows下编辑时，会把东西放在 用户/.kettle下,把这个目录拷贝到linux上用户目录下就行了
+
+	涉及文件时，尤其要注意文件格式时dos还是unix，设置错误会出现 Couldn't open file #0的错误
+
+    如果涉及到hadoop，则要
+        1、把shim相关的文件也拷贝到linux上（文件在plugins\pentaho-big-data-plugin\hadoop-configurations）
+        2、更改plugins\pentaho-big-data-plugin\plugin.properties文件，把配置项active.hadoop.configuration配置为对应shim的目录名字，如myhadoop3

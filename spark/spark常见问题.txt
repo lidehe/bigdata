@@ -1,0 +1,186 @@
+
+
+2019年11月12日
+	spark集群搭建，生产模式的cluster manager采用yarn还是standalone？
+	如果用standalong，那么HA应该通过zookeeper实现，在spark这边做配置
+	如果使用yarn，则yarn自生有HA，或者zookeeper，不需要再spark这边做配置
+
+	提交sql文件执行的时候，如果使用命令 spark-sql --master spark://{host}:{port}  -f test.sql
+	报错
+	Cluster deploy mode is not applicable to Spark SQL shell
+	因为交互式的关系，deploy-mode不能使用cluster，使用默认的client模式，使用如下即可
+	spark-sql --master spark://{host}:{port} -f test.sql
+	此外，如果配置了HA，那么可以这样提交：
+	spark-sql --master spark://{host1}:{port1},{host2}:{port2},{host3}:{port3}  -hivevar -f test.sql
+
+
+
+2019年11月14日
+	spark代码执行，连接远程master，服务端报错NettyRpcEndpointRef; local class incompatible: stream classdesc
+								 客户端表现为：All master not available
+	原因 序列化和反序列化的时候，因为双方使用的scala的版本不一致，导致serialVersionUID不一致，最后在反序列化解析数据的时候报错
+	参考 https://blog.csdn.net/diaobatian/article/details/102916435
+
+
+
+2019年11月18日
+    -- spark on yarn
+    		搭建很简单，拷贝几个xml配置文件到spark的conf目录下，启动一下yarn就行了，提交任务时指定 --master yarn就行了
+    		特别注意，yarn模式下是不需要启动worker的，提交任务之后，yarn会根据slaves文件自动启动相应的worker
+    		
+    		问题如下：
+			配置好spark on yarn之后，执行任务总是报错client.TransportClient: Failed to send RPC RPC java.nio.channels.ClosedChannelException
+			查了一下，好像是内存分配不够的问题，但是内存有200多G呢，怎么会不够呢？
+			按如下方法解决了，但是需要看究竟怎么回事：
+			<property>
+    				<name>yarn.nodemanager.pmem-check-enabled</name>
+    				<value>false</value>
+			</property>
+			<property>
+				<name>yarn.nodemanager.vmem-check-enabled</name>
+    				<value>false</value>
+			</property>
+
+
+	-- SparkSQL java编程
+            执行方式：
+            	1 提交执行，可以不指定master
+            	2 远程执行，
+            	      需要指定你开发的系统的ip和hostname,否则始终接收不到查询结果，因为执行方式为client，driver是在本地的，服务器解析不到本地的hostname，无法把结果发送过来
+            	      并且只能是standalone模式的，并且要启动master和worker,否则一直报错：Initial job has not accepted...
+
+	   		指定setMaster("spark://host:port")的时候，如果enableHiveSupport()则报错 Unable to instantiate SparkSession with Hive support because Hive classes are not found
+			不过，由于使用了yarn，不需要setMaster()了，则不报错，好奇怪啊
+			解决办法：
+				maven引入
+				spark-hive依赖
+				hdfs-site.xml  core-site.xml hive-site.xml拷贝到resource目录下
+				以下是完整依赖：
+				 <dependency>
+            		<groupId>org.apache.spark</groupId>
+            		<artifactId>spark-core_2.11</artifactId>
+           		 	<version>2.4.4</version>
+        		</dependency>
+        		<dependency>
+            		<groupId>org.apache.spark</groupId>
+            		<artifactId>spark-sql_2.11</artifactId>
+            		<version>2.4.4</version>
+        		</dependency>		
+        		<dependency>
+            		<groupId>org.apache.spark</groupId>
+            		<artifactId>spark-hive_2.11</artifactId>
+            		<version>2.4.4</version>
+        		</dependency>
+			
+			此外，注意以下版本问题，在2019年11月14日遇到过哦
+			编程时，获取表的时候，要不要指定数据库？看来是了
+
+
+
+2019年11月28日
+
+    -- spark执行的两种方式
+         client--交互式【默认方式】
+              适用于：spark-sql、spark-shell、spark-submit
+
+         cluster--非交互式
+              适用于：spark-submit
+
+	-- spark提交的两种方式
+	   	提交到本地【默认方式】 不指定--master 或者指定--master local[本地worker进程数]
+	   	      注意，此种模式下，执行方式只能是client
+
+	   	提交到管理器 指定--master 管理器地址
+	   	      此种模式下，执行方式可以是client、cluster
+
+        仅当提交到管理器时，才能在管理器中看到
+
+    -- 分布式执行引擎
+       start-thriftserver.sh 参数与本节内容一样，也可以以client/cluster方式执行，也可以选择把远程客户端提交的sql提交到local或者管理器
+
+    -- 总结
+       spark-sql --master local    --deploy-mode client 可简写 spark-sql                       
+       spark-sql --master local[n] --deploy-mode client 简写 spark-sql --master local[n]
+       spark-sql --master manager  --deploy-mode client 
+
+       spark-shell --master local     --deploy-mode client 简写 spark-shell
+       spark-shell --master local[n]  --deploy-mode client 简写 spark-shell --master local[n]
+       spark-shell --master manager   --deploy-mode client 简写 spark-shell --master manager
+
+       spark-submit --master local     --deploy-mode client 简写 spark-submit
+       spark-submit --master local[n]  --deploy-mode client 简写 spark-submit --master local[n]
+       spark-submit --master manager   --deploy-mode client 简写 spark-shell --master manager
+       spark-submit --master manager   --deploy-mode cluster 不能简写
+
+       appname的问题 --name xxx，具体参考：https://www.jianshu.com/p/1d652736bdd6
+
+       https://www.cnblogs.com/Transkai/p/11366049.html
+
+
+
+-- DataSet和RDD
+	（1）RDD不支持sparksql操作，DF和DS支持sparksql
+	
+	（2）DF和DS可以注册临时表/视窗，支持sql查询
+
+
+
+20191206 
+      -- Spark 连接 hdfs时
+      		问题：Call From to master:8020 failed on connection exception:
+      		原因：Spark默认hdfs的端口号为：8020    Hadoop默认hdfs的端口号是：9000
+      		解决：hdfs地址写错了，应该是hdfs://zx162:9000/person.txt，而不是hdfs://zx162/9000/person.txt
+
+      -- Spark执行找不到HBase的jar
+      		问题：找不到HbaseConfiguration类 NoClassDefFoundError: org/apache/hadoop/hbase/HBaseConfiguration
+      		原因：hbase的jar没有在类路径里
+      		解决：spark-submit --master yarn --jars hbase/hbase-2.2.2/lib/hbase-common-2.2.2.jar --class com.zxftech.Prod --deploy-mode client glass-1.0-SNAPSHOT.jar
+          
+          补充：通过对spark执行driver的过程的了解，发现把相关的HBase的jar放到${SPARK_HOME}/jars里也行，就不用 --jars了，这个是在安装环境层面进行解决的
+
+通常我们将Spark任务编写后打包成jar包，使用spark-submit进行提交，因为spark是分布式任务，如果运行机器上没有对应的依赖jar文件就会报ClassNotFound的错误。 
+
+下面有三个解决方法：
+
+方法一：spark-submit –jars
+根据spark官网，在提交任务的时候指定–jars，用逗号分开。这样做的缺点是每次都要指定jar包，如果jar包少的话可以这么做，但是如果多的话会很麻烦。
+
+ 
+spark-submit --master yarn-client --jars ***.jar,***.jar(你的jar包，用逗号分隔) mysparksubmit.jar
+方法二：extraClassPath
+提交时在spark-default中设定参数，将所有需要的jar包考到一个文件里，然后在参数中指定该目录就可以了，较上一个方便很多：
+
+ 
+spark.executor.extraClassPath=/home/hadoop/wzq_workspace/lib/*
+spark.driver.extraClassPath=/home/hadoop/wzq_workspace/lib/*
+ 需要注意的是,你要在所有可能运行spark任务的机器上保证该目录存在，并且将jar包考到所有机器上。这样做的好处是提交代码的时候不用再写一长串jar了，缺点是要把所有的jar包都拷一遍。
+
+方法三：sbt-assembly或maven-assembly
+        如果你还是觉得第二种麻烦，这种方法是将所有依赖的jar包，包括你写的代码全部打包在一起。使用sbt工具或者maven工具打包，这种方法打包后会使得jar包很大。
+
+具体的打包方式另找sbt、maven教程。 
+
+
+      -- 问题：hbase启动失败 
+      		'hbase.wal.dir' points to a FileSystem mount that can provide i
+      		解决：配置
+     	 	<property>
+				<name>hbase.unsafe.stream.capability.enforce</name>
+				<value>false</value>
+			</property>
+
+
+
+20191213
+	部署集群时pid和日志目录设置：
+		组件进程pid存放位置设置
+			hadoop  hadoop-env.sh
+			spark   spark-env.sh
+
+    	日志路径设置
+    		spark 	spark-env.sh,修改属性SPARK_LOG_DIR
+    		hadoop 	hadoop-env.sh,修改属性HADOOP_LOG_DIR
+    		hive 	复制hive-log4j2.properties.template 为hive-log4j2.properties，修改属性property.hive.log.dir
+
+
+

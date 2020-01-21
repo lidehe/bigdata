@@ -1,0 +1,18 @@
+
+
+
+
+依赖jar的处理，关键点spark-class脚本中变量 LAUNCH_CLASSPATH
+		通过对spark执行driver的过程的了解，发现把相关的HBase的jar放到${SPARK_HOME}/jars里也行，就不用 --jars了，这是在安装环境层面进行解决的
+		当然了，也可以通过--jars传递，这是在执行层面进行解决的
+
+
+
+SparkSubmitCommandBuilder类中的方法buildSparkSubmitCommand有以下一段貌似有点东西：
+    // Load the properties file and check whether spark-submit will be running the app's driver
+    // or just launching a cluster app. When running the driver, the JVM's argument will be
+    // modified to cover the driver's configuration.
+	加载属性文件并且检查spark-submit会否运行驱动程序还是仅启动一个集群应用。当执行驱动程序，JVM的参数会被改成驱动程序的配置
+
+	String extraClassPath = isClientMode ? config.get(SparkLauncher.DRIVER_EXTRA_CLASSPATH) : null;
+	是不是说，如果是client模式，我就可以在配置文件里写个 DRIVER_EXTRA_CLASSPATH ，指向依赖的jar

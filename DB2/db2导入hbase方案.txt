@@ -1,0 +1,8 @@
+
+1)HBase API
+优点：简单
+缺点：占用region，特别是数据量大时降低整体服务性能
+
+2)Bulkload
+优点：不占用region，数据处理用MR
+缺点：需要自己开发map函数

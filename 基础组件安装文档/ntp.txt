@@ -1,0 +1,42 @@
+1.条件：
+1）centos自带有ntp服务
+
+2）局域网的ip假设如下：
+192.168.184.11（ntp本地服务器）
+192.168.184.12
+192.168.184.13
+
+3）目的：因为没网，但又要时间同步，所以只能在本地服务器上设置好时间（与北京时间差不多），然后其他主机与该本地服务器时间同步即可。
+
+2.做法
+
+1）在192.168.184.11（即本地服务器）中的做法如下：
+① data -s "具体年月日时分秒"
+
+② vim /etc/ntp.conf
+
+③ 在该文件下添加如下内容并保存：
+# 允许内网其他机器同步时间
+restrict 192.168.184.0 mask 255.255.255.0 nomodify notrap
+# 外部时间服务器不可用时，以本地时间作为时间服务
+server  127.127.1.0     # local clock
+fudge   127.127.1.0 stratum 8
+
+④启动ntp服务
+cd /usr/lib/systemd/system
+systemctl start ntpd #启动
+systemctl enable ntpd.service #设置开机启动服务　
+
+
+2）在其他节点（比如这边的：192.168.184.12，192.168.184.13）的做法如下：
+① 执行vim /etc/ntp.conf，加入一下内容：
+restrict 127.0.0.1
+restrict -6 ::1
+  
+# 配置时间服务器为本地的时间服务器
+server 192.168.184.11
+restrict 192.168.184.11 nomodify notrap noquery
+server  127.127.1.0     # local clock
+fudge   127.127.1.0 stratum 8
+
+②手动ntpdate同步：ntpdate -u 192.168.184.11

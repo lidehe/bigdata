@@ -1,0 +1,60 @@
+
+-- 关联Java工程
+    component/XMLTrans
+
+
+-- 使用方式
+    1）Java工程打包丢到kettle的lib下
+        注意：
+            Java工程依赖的jar包是否拷贝到lib下，取决于Java工程的打包方式.如果不把依赖的jar打进包里，就需要把所有依赖的jar拷贝到lib下
+            另外，拷贝完成后，需要重新启动kettle
+
+    2）在kettle可视化编辑界面中，新建trans，trans种建consumer（参考《kettle使用kafka.txt》）和Java控件（参考kettle使用Java代码.txt）
+
+    3）把下面“代码”中代码粘贴到Java控件里。
+        注意：
+            3.1）代码中的“Message”是consumer从kafka消费的消息的value，要在consumer里的“Transformations”做好配置
+            3.2）代码中的kafka集群信息要按实际情况填写
+
+
+代码：
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import java.util.Properties;
+      
+import com.alibaba.fastjson.JSONObject;
+import com.zxftech.rrms.XmlParser;
+
+        Properties props = new Properties();
+        KafkaProducer producer =null;
+
+        public boolean init(StepMetaInterface stepMetaInterface, StepDataInterface stepDataInterface) {
+            props.put("bootstrap.servers", "10.204.145.155:9092,10.204.145.156:9092,10.204.145.157:9092");
+            props.put("acks", "all");
+            props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+            props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+
+            producer = new KafkaProducer<String, String>(props);
+            return parent.initImpl(stepMetaInterface, stepDataInterface);
+        }
+
+        public boolean processRow(StepMetaInterface smi, StepDataInterface sdi) throws KettleException {
+            Object[] r = getRow();
+
+            if (r == null) {
+                setOutputDone();
+                return false;
+            }
+
+            // Get the value from an input field
+            String xml = get(Fields.In, "Message").getString(r);
+            JSONObject jobject = XmlParser.xml2Json(xml); // 调用Java工程里的对象.方法
+            if(jobject==null){
+                producer.send(new ProducerRecord<String, String>("kettle_test8", "key"+System.nanoTime(), "emmmm...xml is null"));
+                return true;
+            }
+            String json=jobject.toString();
+            producer.send(new ProducerRecord<String, String>("kettle_test8", "key"+System.nanoTime(), json));
+            // producer.close();
+            return true;
+        }

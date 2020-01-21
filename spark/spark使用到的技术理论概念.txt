@@ -1,0 +1,40 @@
+
+pipeline
+	Spark之pipeline机制
+	如果连续的变换算子序列都是窄依赖，就可以把很多个 fork/join并为一个，不但减少了大量的全局barrier，而且无需物化很多中间结果RDD，这将极大地提升性能。
+    参考：https://blog.csdn.net/modefrog/article/details/79581176
+
+
+barrier | 同步屏障
+	逻辑上，每个RDD的算子都是一个fork/join（此join非上文的join算子，而是指同步多个并行任务的barrier）：把计算fork到每个分区，算完后join，然后fork/join下一个RDD的算子。
+	在spark中pipeline是一个partition对应一个partition，所以在stage内部只有窄依赖。pipeline详解
+	stage与stage之间是宽依赖
+
+	可以用于多线程计算数据，最后合并计算结果的场景。
+	与 CountDownLatch 区别
+	CountDownLatch 是一次性的，CyclicBarrier 是可循环利用的
+	CountDownLatch 参与的线程的职责是不一样的，有的在倒计时，有的在等待倒计时结束。CyclicBarrier参与的线程职责是一样的。
+
+
+select name,sum(amt) over (partition by name order by month),month from incomes;
+
+select sum(amt) over (partition by name order by month),name,month from incomes;
+
+
+
+
+
+
+计算模型：
+
+通常来讲，针对数据处理有几种常见模型，包括：Iterative Algorithms，Relational Queries，MapReduce，Stream Processing。例如Hadoop MapReduce采用了MapReduces模型，Storm则采用了Stream Processing模型。RDD混合了这四种模型，使得Spark可以应用于各种大数据处理场景。
+
+RDD作为数据结构，本质上是一个只读的分区记录集合。一个RDD可以包含多个分区，每个分区就是一个dataset片段。RDD可以相互依赖。如果RDD的每个分区最多只能被一个Child RDD的一个分区使用，则称之为narrow dependency；若多个Child RDD分区都可以依赖，则称之为wide dependency。不同的操作依据其特性，可能会产生不同的依赖。例如map操作会产生narrow dependency，而join操作则产生wide dependency。
+
+
+Spark之所以将依赖分为narrow与wide，基于两点原因:
+	首先，narrow dependencies可以支持在同一个cluster node上以管道形式执行多条命令，例如在执行了map后，紧接着执行filter。相反，wide dependencies需要所有的父分区都是可用的，可能还需要调用类似MapReduce之类的操作进行跨节点传递。
+	
+	其次，则是从失败恢复的角度考虑。narrow dependencies的失败恢复更有效，因为它只需要重新计算丢失的parent partition即可，而且可以并行地在不同节点进行重计算。而wide dependencies牵涉到RDD各级的多个Parent Partitions。
+
+

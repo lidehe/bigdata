@@ -1,0 +1,125 @@
+
+详细案例参考：https://blog.csdn.net/u014432433/article/details/51042984
+
+-- mapreduce编程
+    ======map程序====
+    // 类型有要求吗？不能随便写？是的，Mapper的四个参数，都可以自定义，但自定义类都实现writeable接口
+    public class MyMap extends Mapper<Object, Text, Text, MyWritable> {
+        MyWritable myWritable = new MyWritable();
+        @Override
+        protected void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            myWritable.setBs(value.toString().concat("zzzz"));
+            context.write(value, myWritable);
+        }
+    }
+
+    ======job程序====
+    public static void main(String[] args) {
+         Configuration configuration = new Configuration();
+         // 如果是提交到集群，这句就不用写了
+         configuration.set("fs.default.name", "hdfs://vm156:9000");
+         Path outPath = new Path("/xz.txt");
+         Job job = Job.getInstance(configuration, "test");
+         job.setJarByClass(Run.class);
+         job.setMapperClass(MyMap.class);
+         // 这里要和map、reduce里对应起来，要么都用默认的，要么都写明，否则会不一致
+         job.setOutputKeyClass(Text.class);
+         job.setOutputValueClass(MyWritable.class);
+         FileInputFormat.addInputPath(job, new Path("/xx.txt"));
+         FileOutputFormat.setOutputPath(job, outPath);
+         job.waitForCompletion(true);
+     }
+
+
+
+-- 多文件输入
+    接口FileInputFormat.addInputPath(job, new Path("/xx.txt"));支持多个输入路径，逗号隔开
+    FileInputFormat.addInputPath(job, new Path("/aa.txt"), new Path("/bbb.txt"), new Path("/ccc.txt"));
+
+
+
+-- 自定义类型
+    因为框架会把map和reduce的输出做序列化，所以它们都需要实现writable接口
+    其中，key要实现WritableComparable接口（WritableComparable接口继承writable接口，所以key也会实现writable接口）
+         value要实现writable接口
+    令人费解的是，为甚有了set()方法，还要有readFields
+    public class MyWritable implements Writable {
+        private String bs;
+    
+        public String getBs() {  return bs;  }
+    
+        public void setBs(String bs) {  this.bs = bs; }
+    
+        @Override
+        public void write(DataOutput out) throws IOException {
+            out.writeBytes(bs);
+        }
+    
+        // 这一步是必须的，否则传来的数据用不了  搞不懂，既然有了set()，为什么还要这个
+        @Override
+        public void readFields(DataInput in) throws IOException {
+            this.bs = in.readLine();
+        }
+    
+        // 最终输出的数据，在这里作格式化
+        @Override
+        public String toString() {
+            return "MyWritable{" + "bs=" + bs + '}';
+        }
+    }
+
+
+
+-- 输出类型的设置（by job）
+    设置最终reduce的输出格式 setOutputKeyClass setOutputValueClass
+    设置map的输出格式        setMapOutputKeyClass setMapOutputValueClass
+
+
+
+-- combiner的使用
+    在map端做本地的聚合，减少shuffle的数据量
+    使用的类与reduce的类一样
+
+
+
+-- 同一个application里多个输入、多个map
+    1、使用ControlledJob和JobControl，详细参考https://www.cnblogs.com/hunttown/p/6913811.html
+        Job job1 = new Job(conf, "Join1");
+        ControlledJob ctrljob1 = new ControlledJob(conf);
+        ctrljob1.setJob(job1);
+    
+        Job job2 = new Job(conf, "Join2");
+        ControlledJob ctrljob2 = new ControlledJob(conf);
+        ctrljob2.setJob(job2);
+    
+        //设置多个作业直接的依赖关系/job-2 的启动，依赖于job-1作业的完成
+        ctrljob2.addDependingJob(ctrljob1);
+    
+        //主的控制容器，控制上面的总的两个子作业
+        JobControl jobCtrl = new JobControl("myOutCount");
+        jobCtrl.addJob(ctrljob1);
+        jobCtrl.addJob(ctrljob2);
+    
+        jobCtrl.allFinished()
+    
+    2、 使用MultipleInputs处理，只能处理结果类型都相同的map
+        Job job=Job.getInstance(configuration,"split file");
+        job.setJarByClass(ByMultipleInputs.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+       // 不同的路径使用不同的mapper处理
+        MultipleInputs.addInputPath(job,new Path("path1"), TextInputFormat.class,SpliteByComma.class);
+        MultipleInputs.addInputPath(job,new Path("path2"), TextInputFormat.class,SpliteBySpace.class);
+
+        // 放到相同的路径下，所以只能处理输出格式一样的多个转换
+        FileOutputFormat.setOutputPath(job, new Path("output"));
+
+        job.waitForCompletion(true);
+
+    总结：
+        第一种方式，适合多输入、处理方式不同（也可相同）、结果（不同）的任务
+        第二种方式，适合多输入、处理方式不同（也可相同）、结果（相同）的任务
+    
+
+
+

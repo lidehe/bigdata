@@ -1,0 +1,229 @@
+简介
+Kudu是Cloudera开源的分布式列式存储引擎，支持分区、随机读写、批量扫描、实时更新等。可以通过Python API、Java API、Spark API、SQL(如Spark SQL、Impala)等读写Kudu。
+1
+安装
+结点规划
+结点    角色
+node1    Master Server、Tablet Server
+node2    Master Server、Tablet Server
+node3    Master Server Tablet Server
+配置NTP时钟同步
+http://kudu.apache.org/docs/troubleshooting.html#ntp
+所有结点执行：yum -y install ntp && /etc/init.d/ntpd restart
+1
+2
+配置yum源
+#官网下载对应的yum源或rpm包:http://kudu.apache.org/docs/installation.html#kudu_package_locations
+[root@node1 ~]# wget -P /etc/yum.repos.d/ http://archive.cloudera.com/kudu/redhat/6/x86_64/kudu/cloudera-kudu.repo
+[root@node1 ~]# scp /etc/yum.repos.d/cloudera-kudu.repo root@node2:/etc/yum.repos.d/
+[root@node1 ~]# scp /etc/yum.repos.d/cloudera-kudu.repo root@node3:/etc/yum.repos.d/
+[root@node1 ~]# scp /etc/yum.repos.d/cloudera-kudu.repo root@node4:/etc/yum.repos.d/
+
+安装Kudu基础组件
+所有安装Master、Tablet结点安装kudu基础组件
+[root@node1 ~]# yum install kudu
+[root@node2 ~]# yum install kudu
+[root@node3 ~]# yum install kudu
+[root@node4 ~]# yum install kudu
+安装Kudu Master
+Master结点安装kudu-master
+[root@node1 ~]# yum install kudu-master
+[root@node2 ~]# yum install kudu-master
+[root@node4 ~]# yum install kudu-master
+
+安装Kudu Tablet
+Tablet结点安装kudu-tserver
+[root@node1 ~]# yum install kudu-tserver
+[root@node2 ~]# yum install kudu-tserver
+[root@node3 ~]# yum install kudu-tserver
+
+安装Kudu Client
+[root@node3 ~]# yum install kudu-client0
+[root@node3 ~]# yum install kudu-client-devel
+
+配置所有Kudu Master-----------------------------------------------------------------------------
+配置Kudu Master结点node1
+cat /etc/default/kudu-master
+    export FLAGS_log_dir=/var/log/kudu
+    export FLAGS_rpc_bind_addresses=node1:7051
+
+cat /etc/kudu/conf/master.gflagfile
+    # Do not modify these two lines. If you wish to change these variables,
+    # modify them in /etc/default/kudu-master.
+    --fromenv=rpc_bind_addresses
+    --fromenv=log_dir
+    --fs_wal_dir=/var/lib/kudu/master
+    --fs_data_dirs=/var/lib/kudu/master
+    # 多个master结点
+    --master_addresses=node1:7051,node2:7051,node4:7051
+
+配置Kudu Master结点node2
+cat /etc/default/kudu-master
+    export FLAGS_log_dir=/var/log/kudu
+    export FLAGS_rpc_bind_addresses=node2:7051
+
+cat /etc/kudu/conf/master.gflagfile
+    # Do not modify these two lines. If you wish to change these variables,
+    # modify them in /etc/default/kudu-master.
+    --fromenv=rpc_bind_addresses
+    --fromenv=log_dir
+    --fs_wal_dir=/var/lib/kudu/master
+    --fs_data_dirs=/var/lib/kudu/master
+    --master_addresses=node1:7051,node2:7051,node4:7051
+
+配置Kudu Master结点node4
+cat /etc/default/kudu-master
+    export FLAGS_log_dir=/var/log/kudu
+    export FLAGS_rpc_bind_addresses=node4:7051
+
+cat /etc/kudu/conf/master.gflagfile
+    # Do not modify these two lines. If you wish to change these variables,
+    # modify them in /etc/default/kudu-master.
+    --fromenv=rpc_bind_addresses
+    --fromenv=log_dir
+    --fs_wal_dir=/var/lib/kudu/master
+    --fs_data_dirs=/var/lib/kudu/master
+    --master_addresses=node1:7051,node2:7051,node4:7051
+
+
+
+配置所有Kudu Tablet----------------------------------------------------------------------------
+配置Kudu Tablet结点node1
+cat /etc/default/kudu-tserver
+    export FLAGS_log_dir=/var/log/kudu
+    export FLAGS_rpc_bind_addresses=node1:7050
+
+cat /etc/kudu/conf/tserver.gflagfile
+    # Do not modify these two lines. If you wish to change these variables,
+    # modify them in /etc/default/kudu-tserver.
+    --fromenv=rpc_bind_addresses
+    --fromenv=log_dir
+    --fs_wal_dir=/var/lib/kudu/tserver
+    --fs_data_dirs=/var/lib/kudu/tserver
+    #Tablet结点指向master结点
+    --tserver_master_addrs=node1:7051,node2:7051,node4:7051
+
+配置Kudu Tablet结点node2
+cat /etc/default/kudu-tserver
+    export FLAGS_log_dir=/var/log/kudu
+    export FLAGS_rpc_bind_addresses=node2:7050
+
+cat /etc/kudu/conf/tserver.gflagfile
+    # Do not modify these two lines. If you wish to change these variables,
+    # modify them in /etc/default/kudu-tserver.
+    --fromenv=rpc_bind_addresses
+    --fromenv=log_dir
+    --fs_wal_dir=/var/lib/kudu/tserver
+    --fs_data_dirs=/var/lib/kudu/tserver
+    --tserver_master_addrs=node1:7051,node2:7051,node4:7051
+
+配置Kudu Tablet结点node3
+cat /etc/default/kudu-tserver
+    export FLAGS_log_dir=/var/log/kudu
+    export FLAGS_rpc_bind_addresses=node3:7050
+
+cat /etc/kudu/conf/tserver.gflagfile
+    # Do not modify these two lines. If you wish to change these variables,
+    # modify them in /etc/default/kudu-tserver.
+    --fromenv=rpc_bind_addresses
+    --fromenv=log_dir
+    --fs_wal_dir=/var/lib/kudu/tserver
+    --fs_data_dirs=/var/lib/kudu/tserver
+    --tserver_master_addrs=node1:7051,node2:7051,node4:7051
+
+启动
+启动Kudu Master
+在node1 node2 node4结点执行：service kudu-master start
+
+启动Kudu Tablet
+在node1 node2 node3结点执行：service kudu-tserver start
+
+验证
+1、查看所有Master
+http://node1:8051/masters
+
+2、查看所有Tablet
+http://node1:8051/tablet-servers
+1
+
+
+测试Impala-Kudu
+1、通过Impala在Kudu上创建表
+CREATE TABLE test_kudu (
+  uid string PRIMARY KEY,
+  reg_date string
+)
+STORED AS KUDU  
+TBLPROPERTIES('kudu.master_addresses' = 'node1:7051,node2:7051,node4:7051') ;
+
+2、通过Impala向Kudu中的表添加数据
+insert into test_kudu values('1','2016-05-27 20:13:40');
+insert into test_kudu values('2','1990-08-29 05:29:22');
+insert into test_kudu values('3','1977-10-16 05:29:22');
+insert into test_kudu values('4','1985-03-30 05:29:22');
+insert into test_kudu values('5','1997-02-18 05:29:22');
+
+3、Impala中查询Kudu中的表
+select * from test_kudu where reg_date>='1985-03-30';
+1
+
+
+4、Java API查询Kudu中的数据
+<dependency>
+        <groupId>org.apache.kudu</groupId>
+        <artifactId>kudu-client</artifactId>
+        <version>1.1.0</version>
+</dependency>
+
+import org.apache.kudu.client.*;
+
+import java.util.Iterator;
+import java.util.List;
+
+/**
+* Author: Wang Pei
+* Summary:
+*  通过Java API查询Kudu中的数据
+*/
+public class ReadDataFromKudu {
+    public static void main(String[] args) throws Exception{
+
+        /**在某个master挂掉后，kudu服务依然可用*/
+        String KUDU_MASTER="node1:7051,node2:7051,node4:7051";
+        KuduClient client = new KuduClient.KuduClientBuilder(KUDU_MASTER).build();
+
+        /**得到kudu中所有的表*/
+        //结果
+//        impala::default.test_kudu
+        List<String> tablesList = client.getTablesList().getTablesList();
+        for (String table : tablesList) {
+            System.out.println(table);
+        }
+
+        /**查询表test_kudu中的数据*/
+        //结果
+//        uid：1 reg_date：2016-05-27 20:13:40
+//        uid：2 reg_date：1990-08-29 05:29:22
+//        uid：3 reg_date：1977-10-16 05:29:22
+//        uid：4 reg_date：1985-03-30 05:29:22
+//        uid：5 reg_date：1997-02-18 05:29:22
+
+        KuduTable kuduTable = client.openTable("impala::default.test_kudu");
+        KuduScanner kuduScanner = client.newScannerBuilder(kuduTable).build();
+        while (kuduScanner.hasMoreRows()){
+            RowResultIterator rowResults = kuduScanner.nextRows();
+            Iterator<RowResult> rowResultIterator = rowResults.iterator();
+            while (rowResultIterator.hasNext()){
+               RowResult row= rowResultIterator.next();
+                String uid = row.getString("uid");
+                String reg_date = row.getString("reg_date");
+                System.out.println("uid："+uid+"\t"+"reg_date："+reg_date);
+            }
+        }
+    }
+}
+
+ntp restart
+service  kudu-master restart
+service kudu-tserver restart
+

@@ -1,0 +1,23 @@
+shim配置
+	-- 选择shim
+			工具->hadoop-distribution->选择一个->ok->重启，一定要重启才能生效哦
+
+	-- 新建shim，如果已有的shim不满足使用
+			进入plugins\pentaho-big-data-plugin\hadoop-configurations
+			参考原有shim，整理好必要的文件
+			编辑config.properties文件，修改name配置项，这个就是咱们新建的shim的名字
+			然后再选择shim，重启即可
+
+
+连接配置
+	1、新建作业（kjob）：文件->新建->作业
+	  1.1 左上角选择“主对象树”，右击Hadoop clusters，新建一个集群（名字自取，本测试用bd）
+		 -- 主要填写HDFS和JobTracker的集群信息
+
+
+如何使用
+	以hdfs上的文本文件读取为例
+	转换里选择 文本文件输入，文件选择时选择从hdfs上读取文件即可
+	千万要注意文件格式选择unix，不是windows
+
+如果在linux上使用，请参考《1 kettle在windows下与linux下.txt》

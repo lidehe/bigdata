@@ -1,0 +1,97 @@
+
+1、新建作业（kjob）：文件->新建->作业
+	  1.1 左上角选择“主对象书”，右击Hadoop clusters，新建一个集群（名字自取，本测试用bd）
+		 -- 主要填写zookeeper和kafka的集群信息
+
+	  1.2 从“作业项目”中拖动一个“START”和“转换”到编辑面板
+
+
+2、新建转换ktran_1：文件->新建->转换
+	  2.1 左上角选则“核心对象”，展开“Streaming",拖动“Get records from stream”到编辑面板双击编辑
+        -- 字段：要从数据流中获取哪些字段，可选字段参考 3.1->--Fields
+
+
+3、新建转换ktran_2：文件->新建->转换
+    3.1 左上角选则“核心对象”，展开“Streaming",拖动“Kafka consumer”到编辑面板，双击编辑
+   		-- Transformation：选择 第2步的文件ktran_1.ktr
+
+   		-- Setup->connnection：勾选Cluster，下拉选择第1步的bd
+   		-- Setup->Topics：下拉选择从哪个topic消费
+   		-- Setup->Consumer group：随便写个
+
+   		-- Batch->kafka消费规则，自己按需填写
+
+   		-- Fields->从kafka取回哪些字段，不考虑数据量和性能的话，全取回来
+
+   		-- Result fields->下拉选择第2步组件
+
+   		-- option->kafka验证信息，按实际环境填写，本案例中集群未做验证，所以不填
+
+   	3.2 左上角选则“核心对象”，展开“Streaming",拖动“Kafka producer”到编辑面板，双击编辑
+   	    -- Setup->connnection：勾选Cluster，下拉选择第1步的bd
+   	    -- Setup->Topic：把数据存到哪个topic,要与3.1->Setup->Topics不一致
+   	    -- Setup->Key field：下拉勾选第2步中的某个字段
+   	    -- Setup->Message field：下拉勾选第2步中的某个字段
+
+   	    -- option->kafka验证信息，按实际环境填写，本案例中集群未做验证，所以不填
+
+4、编辑第1步建的kjob文件
+	  4.1 双击“转换”
+		    -- Transformation：选择第3步的文件ktran_2.ktr
+
+
+
+5、注意点：
+	  5.1 在3.1->-- Batch->部分，特别要关注“Offset management”的设置
+		   -- Commit when recored read：在消息之间间隔小且数量大时，会来不及提交，导致异常
+		   -- Commit when batch completed：如果批的数据量设置的当，就不会带来上述问题，但不知道会否导致重复消费问题
+		     （如果最后一波数据量未达到一批的量，会不会就不提交，如果此时停掉程序，会否导致最后一波数据被下次重复消费）
+          经过简单测试，不会重复消费，所以建议使用第二个选项。
+
+
+6、关于性能：
+    streaming里的consumer的速度在不涉及业务的情况下可以达到36万条/秒，足够使用
+    streaming里的producer的速度在不涉及业务的情况下仅能达到2.2千/秒，显然是不够的
+    所以要通过Java代码自己实现producer：
+        1、拷贝kafka-clientxxx.jar到lib下，重启
+        2、在producer的地方添加组件“脚本->Java”
+        3、贴上如下代码
+            这里用到一个技巧：把Produce的实例化放到init里，可以避免每条记录都实例化一次，使得速度提升上万倍
+            import org.apache.kafka.clients.producer.KafkaProducer;
+            import org.apache.kafka.clients.producer.ProducerRecord;
+            import java.util.Properties;
+    
+            Properties props = new Properties();
+            KafkaProducer producer =null;
+            // 初始化连接等信息
+            public boolean init(StepMetaInterface stepMetaInterface, StepDataInterface stepDataInterface) {
+    
+                props.put("bootstrap.servers", "10.204.145.155:9092,10.204.145.156:9092,10.204.145.157:9092");
+                props.put("acks", "all");
+                props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+                props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+    
+                producer = new KafkaProducer<String, String>(props);
+                return parent.initImpl(stepMetaInterface, stepDataInterface);
+            }
+            // 实际处理每一行
+            public boolean processRow(StepMetaInterface smi, StepDataInterface sdi) throws KettleException {
+                Object[] r = getRow();
+    
+                if (r == null) {
+                    setOutputDone();
+                    return false;
+                }
+    
+                // Get the value from an input field
+                String key = get(Fields.In, "keys").getString(r);
+                String val = key+"zz";
+                producer.send(new ProducerRecord<String, String>("kettle_test", key, val));
+                // producer.close();
+                return true;
+            }
+            // 最终关闭连接资源
+            public void dispose(StepMetaInterface smi, StepDataInterface sdi) {
+                producer.close();
+                parent.disposeImpl(smi, sdi);
+            }
