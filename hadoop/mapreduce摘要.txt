@@ -72,4 +72,11 @@ Reducer has 3 primary phases(阶段): shuffle, sort and reduce.
 
 	TextInputFormat is the default InputFormat.
 	TextOutputFormat is the default OutputFormat.
-	所以如果map里使用了非Text的类，但是job没有对应做设置，就会导致不匹配异常
+		所以如果map里使用了非Text的类，但是job没有对应做设置，就会导致不匹配异常
+
+	FileOutputCommitter is the default OutputCommitter.
+
+	控制Intermediate Outputs 和 Job Outputs的Data Compression
+
+
+	Skipping Bad Records
