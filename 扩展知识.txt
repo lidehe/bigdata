@@ -1,0 +1,35 @@
+
+算法：树、图、排序、分治、贪心。。。
+
+操作系统：
+
+网络：
+
+
+
+
+JNI
+	Java Native Interface
+	Java与操作系统的桥梁
+	实际操作示例：https://blog.csdn.net/ZYC88888/article/details/82909205
+
+RDMA
+	Mapreduce的shuffle基于http
+	Spark的shuffle基于RDMA
+	允许用户态的应用程序直接读取和写入远程内存，而无需CPU介入多次拷贝内存，并可绕过内核直接向网卡写数据，实现了高吞吐量、超低时延和低CPU开销的效果
+
+Fabric网络架构
+	大多数数据中心的网络架构
+
+ECMP(Equal-cost multi-path)
+	ECMP是一个逐跳的基于流的负载均衡策略，当路由器发现同一目的地址出现多个最优路径时，会更新路由表，为此目的地址添加多条规则，对应于多个下一跳。可同时利用这些路径转发数据，增加带宽。ECMP算法被多种路由协议支持，例如：OSPF、ISIS、EIGRP、BGP等。在数据中心架构VL2中也提到使用ECMP作为负载均衡算法。
+	参考文章：https://www.sohu.com/a/258041228_100289134
+	ECMP的路径选择策略有多种方法：
+		哈希，例如根据源IP地址的哈希为流选择路径。
+		轮询，各个流在多条路径之间轮询传输。
+		基于路径权重，根据路径的权重分配流，权重大的路径分配的流数量更多。
+
+
+
+shuffle数据发送过程，也是tcp协议发送数据流程
+	https://www.iteblog.com/archives/1964.html
