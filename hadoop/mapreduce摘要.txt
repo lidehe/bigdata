@@ -1,4 +1,9 @@
 
+
+如果使用一个reduce实现排序，虽然可以实现排序，但失去了数据并行执行的优势；可以实现多reduce输出，并实现全排序
+
+
+
 Applications can specify a comma separated list of paths which would be present in the current working directory of the task using the option -files. The -libjars option allows applications to add jars to the classpaths of the maps and reduces.
 
 
@@ -59,4 +64,12 @@ Reducer has 3 primary phases(阶段): shuffle, sort and reduce.
 		  但是这个有序不是reducer做的哦
 
 
-如果使用一个reduce实现排序，虽然可以实现排序，但失去了数据并行执行的优势；可以实现多reduce输出，并实现全排序
+	Counter is a facility for MapReduce applications to report its statistics.
+
+
+
+	More details on how to load shared libraries through distributed cache are documented at Native Libraries.
+
+	TextInputFormat is the default InputFormat.
+	TextOutputFormat is the default OutputFormat.
+	所以如果map里使用了非Text的类，但是job没有对应做设置，就会导致不匹配异常
